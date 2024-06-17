@@ -7,6 +7,7 @@ import sys
 import typing as t
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+import threading
 
 import simplejson as json
 
@@ -216,7 +217,7 @@ class ActivateVersionMessage(Message):
         """Post-init processing."""
         self.type = SingerMessageType.ACTIVATE_VERSION
 
-
+lock = threading.Lock()
 def format_message(message: Message) -> str:
     """Format a message as a JSON string.
 
@@ -226,12 +227,15 @@ def format_message(message: Message) -> str:
     Returns:
         The formatted message.
     """
-    return json.dumps(
-        message.to_dict(),
-        use_decimal=True,
-        default=_default_encoding,
-        separators=(",", ":"),
-    )
+    with lock:
+        local_data = threading.local()
+        local_data.message = message
+        return json.dumps(
+            local_data.message.to_dict(),
+            use_decimal=True,
+            default=_default_encoding,
+            separators=(",", ":"),
+        )
 
 
 def write_message(message: Message) -> None:
