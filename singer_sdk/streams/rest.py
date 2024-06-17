@@ -188,6 +188,7 @@ class RESTStream(Stream, t.Generic[_TToken], metaclass=abc.ABCMeta):  # noqa: PL
             < HTTPStatus.INTERNAL_SERVER_ERROR
         ):
             msg = self.response_error_message(response)
+            self.logger.error("Fatal API error: %s on the URL : %s", msg , response.url)
             raise FatalAPIError(msg)
 
     def response_error_message(self, response: requests.Response) -> str:
@@ -213,6 +214,7 @@ class RESTStream(Stream, t.Generic[_TToken], metaclass=abc.ABCMeta):  # noqa: PL
         return (
             f"{response.status_code} {error_type} Error: "
             f"{response.reason} for path: {full_path}"
+            f"{response.url} with response: {response.text}"
         )
 
     def request_decorator(self, func: t.Callable) -> t.Callable:
