@@ -1085,8 +1085,13 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
                 child_context: Context | None = (
                     None if current_context is None else copy.copy(current_context)
                 )
-                with self.lock :
-                    for idx, record_result in enumerate(self.get_records(current_context)):
+                
+                with self.lock:
+                    local_data = threading.local()
+                    local_data.records = enumerate(self.get_records(current_context))
+                    
+
+                for idx, record_result in local_data.records:
                         self._check_max_record_limit(current_record_index=record_index)
 
                         if isinstance(record_result, tuple):
