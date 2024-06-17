@@ -11,6 +11,7 @@ import typing as t
 from os import PathLike
 from pathlib import Path
 from types import MappingProxyType
+import threading
 
 import pendulum
 
@@ -777,15 +778,16 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
             )
 
     # Private message authoring methods:
-
+    thread_lock = threading.Lock()
     def _write_state_message(self) -> None:
         """Write out a STATE message with the latest state."""
         if (not self._is_state_flushed) and (
             self.tap_state != self._last_emitted_state
         ):
-            self._tap.write_message(singer.StateMessage(value=self.tap_state))
-            self._last_emitted_state = copy.deepcopy(self.tap_state)
-            self._is_state_flushed = True
+            with self.thread_lock:
+                self._tap.write_message(singer.StateMessage(value=self.tap_state))
+                self._last_emitted_state = copy.deepcopy(self.tap_state)
+                self._is_state_flushed = True
 
     def _generate_schema_messages(
         self,
