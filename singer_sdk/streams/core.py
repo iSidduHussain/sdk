@@ -109,7 +109,7 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
 
     selected_by_default: bool = True
     """Whether this stream is selected by default in the catalog."""
-
+    lock = threading.Lock()
     def __init__(
         self,
         tap: Tap,
@@ -778,13 +778,13 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
             )
 
     # Private message authoring methods:
-    thread_lock = threading.Lock()
+
     def _write_state_message(self) -> None:
         """Write out a STATE message with the latest state."""
         if (not self._is_state_flushed) and (
             self.tap_state != self._last_emitted_state
         ):
-            with self.thread_lock:
+            with self.lock:
                 self._tap.write_message(singer.StateMessage(value=self.tap_state))
                 self._last_emitted_state = copy.deepcopy(self.tap_state)
                 self._is_state_flushed = True
@@ -1085,47 +1085,47 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
                 child_context: Context | None = (
                     None if current_context is None else copy.copy(current_context)
                 )
+                with self.lock :
+                    for idx, record_result in enumerate(self.get_records(current_context)):
+                        self._check_max_record_limit(current_record_index=record_index)
 
-                for idx, record_result in enumerate(self.get_records(current_context)):
-                    self._check_max_record_limit(current_record_index=record_index)
+                        if isinstance(record_result, tuple):
+                            # Tuple items should be the record and the child context
+                            record, child_context = record_result
+                        else:
+                            record = record_result
+                        try:
+                            self._process_record(
+                                record,
+                                child_context=child_context,
+                                partition_context=state_partition_context,
+                            )
+                        except InvalidStreamSortException as ex:  # pragma: no cover
+                            log_sort_error(
+                                log_fn=self.logger.error,
+                                ex=ex,
+                                record_count=record_index + 1,
+                                partition_record_count=idx + 1,
+                                current_context=current_context,
+                                state_partition_context=state_partition_context,
+                                stream_name=self.name,
+                            )
+                            raise
 
-                    if isinstance(record_result, tuple):
-                        # Tuple items should be the record and the child context
-                        record, child_context = record_result
-                    else:
-                        record = record_result
-                    try:
-                        self._process_record(
-                            record,
-                            child_context=child_context,
-                            partition_context=state_partition_context,
-                        )
-                    except InvalidStreamSortException as ex:  # pragma: no cover
-                        log_sort_error(
-                            log_fn=self.logger.error,
-                            ex=ex,
-                            record_count=record_index + 1,
-                            partition_record_count=idx + 1,
-                            current_context=current_context,
-                            state_partition_context=state_partition_context,
-                            stream_name=self.name,
-                        )
-                        raise
+                        if selected:
+                            if write_messages:
+                                self._write_record_message(record)
 
-                    if selected:
-                        if write_messages:
-                            self._write_record_message(record)
+                            self._increment_stream_state(record, context=current_context)
+                            if (
+                                record_index + 1
+                            ) % self.STATE_MSG_FREQUENCY == 0 and write_messages:
+                                self._write_state_message()
 
-                        self._increment_stream_state(record, context=current_context)
-                        if (
-                            record_index + 1
-                        ) % self.STATE_MSG_FREQUENCY == 0 and write_messages:
-                            self._write_state_message()
+                            record_counter.increment()
+                            yield record
 
-                        record_counter.increment()
-                        yield record
-
-                    record_index += 1
+                        record_index += 1
 
                 if current_context == state_partition_context:
                     # Finalize per-partition state only if 1:1 with context
