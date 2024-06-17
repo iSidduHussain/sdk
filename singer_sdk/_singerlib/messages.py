@@ -219,7 +219,7 @@ class ActivateVersionMessage(Message):
 
 lock = threading.Lock()
 def format_message(message: Message) -> str:
-    """Format a message as a JSON string.
+    """Format a message as a JSON string. added lock for Thread safe 
 
     Args:
         message: The message to format.
