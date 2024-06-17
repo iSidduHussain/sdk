@@ -786,7 +786,7 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
         ):
             with self.lock:
                 self._tap.write_message(singer.StateMessage(value=self.tap_state))
-                self._last_emitted_state = copy.deepcopy(self.tap_state)
+                self._last_emitted_state = self.tap_state
                 self._is_state_flushed = True
 
     def _generate_schema_messages(
@@ -1085,7 +1085,7 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
                 child_context: Context | None = (
                     None if current_context is None else copy.copy(current_context)
                 )
-                
+
                 with self.lock:
                     local_data = threading.local()
                     local_data.records = enumerate(self.get_records(current_context))
