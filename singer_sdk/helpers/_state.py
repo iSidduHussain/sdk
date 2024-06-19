@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+import threading
 
 from singer_sdk.exceptions import InvalidStreamSortException
 from singer_sdk.helpers._typing import to_json_compatible
@@ -20,7 +21,7 @@ STARTING_MARKER = "starting_replication_value"
 
 logger = logging.getLogger("singer_sdk")
 
-
+lock = threading.Lock()
 def get_state_if_exists(
     tap_state: dict,
     tap_stream_id: str,
@@ -115,28 +116,29 @@ def get_writeable_state_dict(
     Raises:
         ValueError: Raise an error if duplicate entries are found.
     """
-    if tap_state is None:
-        msg = "Cannot write state to missing state dictionary."
-        raise ValueError(msg)
+    with lock:
+        if tap_state is None:
+            msg = "Cannot write state to missing state dictionary."
+            raise ValueError(msg)
 
-    if "bookmarks" not in tap_state:
-        tap_state["bookmarks"] = {}
-    if tap_stream_id not in tap_state["bookmarks"]:
-        tap_state["bookmarks"][tap_stream_id] = {}
-    stream_state = t.cast(dict, tap_state["bookmarks"][tap_stream_id])
-    if not state_partition_context:
-        return stream_state
+        if "bookmarks" not in tap_state:
+            tap_state["bookmarks"] = {}
+        if tap_stream_id not in tap_state["bookmarks"]:
+            tap_state["bookmarks"][tap_stream_id] = {}
+        stream_state = t.cast(dict, tap_state["bookmarks"][tap_stream_id])
+        if not state_partition_context:
+            return stream_state
 
-    if "partitions" not in stream_state:
-        stream_state["partitions"] = []
-    stream_state_partitions: list[dict] = stream_state["partitions"]
-    if found := _find_in_partitions_list(
-        stream_state_partitions,
-        state_partition_context,
-    ):
-        return found
+        if "partitions" not in stream_state:
+            stream_state["partitions"] = []
+        stream_state_partitions: list[dict] = stream_state["partitions"]
+        if found := _find_in_partitions_list(
+            stream_state_partitions,
+            state_partition_context,
+        ):
+            return found
 
-    return _create_in_partitions_list(stream_state_partitions, state_partition_context)
+        return _create_in_partitions_list(stream_state_partitions, state_partition_context)
 
 
 def write_stream_state(
