@@ -787,7 +787,7 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
         if (not self._is_state_flushed) and (
             self.tap_state != self._last_emitted_state
         ):
-            with self.lock:
+            if not self.config.get("ignore_state" , False):
                 self._tap.write_message(singer.StateMessage(value=self.tap_state))
                 self._last_emitted_state = copy.deepcopy(self.tap_state)
                 self._is_state_flushed = True
