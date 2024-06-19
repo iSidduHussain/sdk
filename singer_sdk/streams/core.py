@@ -11,6 +11,7 @@ import typing as t
 from os import PathLike
 from pathlib import Path
 from types import MappingProxyType
+import threading
 
 import pendulum
 
@@ -108,6 +109,9 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
 
     selected_by_default: bool = True
     """Whether this stream is selected by default in the catalog."""
+
+    lock = threading.Lock()
+    """Creating a lock for Thread Safe Execution"""
 
     def __init__(
         self,
@@ -783,9 +787,10 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
         if (not self._is_state_flushed) and (
             self.tap_state != self._last_emitted_state
         ):
-            self._tap.write_message(singer.StateMessage(value=self.tap_state))
-            self._last_emitted_state = copy.deepcopy(self.tap_state)
-            self._is_state_flushed = True
+            with self.lock:
+                self._tap.write_message(singer.StateMessage(value=self.tap_state))
+                self._last_emitted_state = copy.deepcopy(self.tap_state)
+                self._is_state_flushed = True
 
     def _generate_schema_messages(
         self,
@@ -1084,7 +1089,11 @@ class Stream(metaclass=abc.ABCMeta):  # noqa: PLR0904
                     None if current_context is None else copy.copy(current_context)
                 )
 
-                for idx, record_result in enumerate(self.get_records(current_context)):
+                with self.lock:
+                    local_data = threading.local()
+                    local_data.records = enumerate(self.get_records(current_context))
+
+                for idx, record_result in local_data.records:
                     self._check_max_record_limit(current_record_index=record_index)
 
                     if isinstance(record_result, tuple):
