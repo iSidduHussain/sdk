@@ -7,6 +7,7 @@ import sys
 import typing as t
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+import threading
 
 import simplejson as json
 
@@ -25,7 +26,7 @@ class SingerMessageType(str, enum.Enum):
     ACTIVATE_VERSION = "ACTIVATE_VERSION"
     BATCH = "BATCH"
 
-
+lock = threading.Lock()
 def _default_encoding(obj: t.Any) -> str:  # noqa: ANN401
     """Default JSON encoder.
 
@@ -226,12 +227,15 @@ def format_message(message: Message) -> str:
     Returns:
         The formatted message.
     """
-    return json.dumps(
-        message.to_dict(),
-        use_decimal=True,
-        default=_default_encoding,
-        separators=(",", ":"),
-    )
+    with lock:
+        local_data = threading.local()
+        local_data.message = message
+        return json.dumps(
+            local_data.message.to_dict(),
+            use_decimal=True,
+            default=_default_encoding,
+            separators=(",", ":"),
+        )
 
 
 def write_message(message: Message) -> None:
