@@ -18,8 +18,9 @@ class FlatteningOptions(t.NamedTuple):
     """A stream map which performs the flattening role."""
 
     max_level: int
+    separator: str
     flattening_enabled: bool = True
-    separator: str = DEFAULT_FLATTENING_SEPARATOR
+
 
 
 def get_flattening_options(
@@ -34,7 +35,7 @@ def get_flattening_options(
         A new FlatteningOptions object or None if flattening is disabled.
     """
     if plugin_config.get("flattening_enabled", False):
-        return FlatteningOptions(max_level=int(plugin_config["flattening_max_depth"]))
+        return FlatteningOptions(max_level=int(plugin_config["flattening_max_depth"]), separator=plugin_config.get("flattening_separator", DEFAULT_FLATTENING_SEPARATOR))
 
     return None
 
